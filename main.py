@@ -88,12 +88,6 @@ class Application(tk.Tk):
         self.image_scrollbar_x.place(relx=0, rely=0.97, relwidth=1, relheight=0.03)
         self.image_scrollbar_y.place(relx=0.97, rely=0, relwidth=0.03, relheight=1)
 
-        # Bind the <MouseWheel> event to the on_mouse_wheel method on the image pane
-        self.pane2.bind('<MouseWheel>', self.on_mouse_wheel)
-
-        # Create the image display
-        self.image_label = tk.Label(self.pane2)
-        self.image_label.pack(fill='both', expand=True)
 
         # Bind the <MouseWheel> event to the on_mouse_wheel method on the image pane
         self.pane2.bind('<MouseWheel>', self.on_mouse_wheel)
@@ -105,6 +99,11 @@ class Application(tk.Tk):
         # Create the text editor with a minimum width of 26 characters
         self.text_editor = tk.Text(self.pane3, width=26)
         self.text_editor.pack(fill='both', expand=True)
+
+        # Load the preferences
+        self.load_preferences()
+
+        self.toggle_theme()
 
         # Ask the user to choose a folder
         self.folder_path = filedialog.askdirectory()
@@ -282,9 +281,9 @@ class Application(tk.Tk):
 
         # Determine the appropriate directory to save the file based on the operating system
         if sys.platform == 'win32':
-            config_dir = os.path.join(os.environ['APPDATA'], 'YourAppName')
+            config_dir = os.path.join(os.environ['APPDATA'], 'SDimageHelper')
         else:
-            config_dir = os.path.join(os.path.expanduser('~'), '.local', 'YourAppName')
+            config_dir = os.path.join(os.path.expanduser('~'), '.local', 'SDimageHelper')
 
         # Create the directory if it doesn't exist
         os.makedirs(config_dir, exist_ok=True)
@@ -292,6 +291,34 @@ class Application(tk.Tk):
         # Write the ConfigParser object to a file in the directory
         with open(os.path.join(config_dir, 'settings.cfg'), 'w') as config_file:
             config.write(config_file)
+
+        print(f"Preferences saved to {os.path.join(config_dir, 'settings.cfg')}")
+
+    def load_preferences(self):
+        # Create a ConfigParser object
+        config = configparser.ConfigParser()
+
+        # Determine the appropriate directory to read the file from based on the operating system
+        if sys.platform == 'win32':
+            config_dir = os.path.join(os.environ['APPDATA'], 'SDimageHelper')
+        else:
+            config_dir = os.path.join(os.path.expanduser('~'), '.local', 'SDimageHelper')
+
+        # Check if the configuration file exists
+        config_file_path = os.path.join(config_dir, 'settings.cfg')
+        if not os.path.exists(config_file_path):
+            print(f"No preferences file found at {config_file_path}")
+            return
+
+        # Read the ConfigParser object from the file
+        config.read(config_file_path)
+
+        # Apply the settings from the ConfigParser object
+        if 'Settings' in config and 'theme' in config['Settings']:
+            self.theme = config['Settings']['theme']
+            self.toggle_theme()
+
+        print(f"Preferences loaded from {config_file_path}")
 
 
 if __name__ == '__main__':
