@@ -1,4 +1,4 @@
-import io
+import configparser
 import os
 import random
 import string
@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 
+
 class Application(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -15,54 +16,160 @@ class Application(tk.Tk):
         self.title('SD AI training image helper')
         self.geometry('800x600')
 
+        # Set the default theme
+        self.theme = 'light'
+
+        self.minsize(800, 600)
+
+        # Define the color values for the dark theme
+        self.dark_theme = {
+            'bg': '#2D2D2D',
+            'fg': '#CCCCCC',
+            'cursor': '#FFCC00',
+            'selectbackground': '#FFCC00',
+            'selectforeground': '#2D2D2D'
+        }
+
+        # Create the menu bar
+        self.menu_bar = tk.Menu(self)
+
+        # Create the File menu
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.file_menu.add_command(label='Save', command=self.save_text_file)
+        self.file_menu.add_command(label='Delete', command=self.delete_text_file)
+        self.menu_bar.add_cascade(label='File', menu=self.file_menu)
+
+        # Create the Edit menu
+        self.edit_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.edit_menu.add_command(label='Preferences', command=self.open_preferences)
+        self.menu_bar.add_cascade(label='Edit', menu=self.edit_menu)
+
+        # Add the menu bar to the window
+        self.config(menu=self.menu_bar)
+
         # Create the panes
         self.pane1 = tk.PanedWindow(self)
         self.pane2 = tk.PanedWindow(self)
         self.pane3 = tk.PanedWindow(self)
 
         # Arrange the panes
-        self.pane1.pack(side='left', fill='both', expand=True)
-        self.pane2.pack(side='left', fill='both', expand=True)
-        self.pane3.pack(side='left', fill='both', expand=True)
+        self.pane1.place(relx=0, rely=0, relwidth=0.1875, relheight=1)  # image chooser
+        self.pane2.place(relx=0.1875, rely=0, relwidth=0.5625, relheight=1)  # image viewer
+        self.pane3.place(relx=0.75, rely=0, relwidth=0.25, relheight=1)  # text editor
 
         # Create the image list
-        self.image_list = tk.Listbox(self.pane1)
+        self.image_list = tk.Listbox(self.pane1, borderwidth=0)
         self.image_list.pack(fill='both', expand=True)
         self.image_list.bind('<<ListboxSelect>>', self.on_image_select)
+
+        # Create the image scale slider
+        self.image_scale = tk.Scale(self.pane2, from_=1, to=200, orient='horizontal', command=self.on_image_select)
+        self.image_scale.pack(fill='x')
+        self.image_scale.set(100)
+
+        # Create a frame for the image display canvas
+        self.image_frame = tk.Frame(self.pane2)
+        self.image_frame.pack(side='left', fill='both', expand=True)
+
+        # Create the image display canvas
+        self.image_canvas = tk.Canvas(self.image_frame)
+        self.image_canvas.pack(side='left', fill='both', expand=True)
+
+        # Create the vertical scrollbar
+        self.image_scrollbar_y = tk.Scrollbar(self.pane2, orient='vertical', command=self.image_canvas.yview)
+        self.image_scrollbar_y.pack(side='right', fill='y')
+        self.image_canvas.configure(yscrollcommand=self.image_scrollbar_y.set)
+
+        # Create the horizontal scrollbar
+        self.image_scrollbar_x = tk.Scrollbar(self.pane2, orient='horizontal', command=self.image_canvas.xview)
+        self.image_scrollbar_x.pack(side='bottom', fill='x')
+        self.image_canvas.configure(xscrollcommand=self.image_scrollbar_x.set)
+
+        self.image_scrollbar_x.place(relx=0, rely=0.97, relwidth=1, relheight=0.03)
+        self.image_scrollbar_y.place(relx=0.97, rely=0, relwidth=0.03, relheight=1)
+
+        # Bind the <MouseWheel> event to the on_mouse_wheel method on the image pane
+        self.pane2.bind('<MouseWheel>', self.on_mouse_wheel)
 
         # Create the image display
         self.image_label = tk.Label(self.pane2)
         self.image_label.pack(fill='both', expand=True)
 
-        # Create the text editor
-        self.text_editor = tk.Text(self.pane3)
+        # Bind the <MouseWheel> event to the on_mouse_wheel method on the image pane
+        self.pane2.bind('<MouseWheel>', self.on_mouse_wheel)
+
+        # Create the image display
+        self.image_label = tk.Label(self.pane2)
+        self.image_label.pack(fill='both', expand=True)
+
+        # Create the text editor with a minimum width of 26 characters
+        self.text_editor = tk.Text(self.pane3, width=26)
         self.text_editor.pack(fill='both', expand=True)
-
-        # Create the save button
-        self.save_button = tk.Button(self.pane3, text='Save', command=self.save_text_file)
-        self.save_button.pack()
-
-        # Create the delete button
-        self.delete_button = tk.Button(self.pane3, text='Delete', command=self.delete_text_file)
-        self.delete_button.pack()
-
-        # Create the save status label
-        self.saved_label = tk.Label(self.pane3, text='')
-        self.saved_label.pack()
-
-        # Bind the Control-S key combination to the save_text_file method
-        self.bind('<Control-s>', self.save_text_file)
 
         # Ask the user to choose a folder
         self.folder_path = filedialog.askdirectory()
         self.load_images()
 
+        # Create a temporary file and fill it with random gibberish
         self.temp_file = tempfile.NamedTemporaryFile(delete=False)
         gibberish = ''.join(random.choices(string.ascii_letters + string.digits, k=100))
         with open(self.temp_file.name, 'w') as file:
             file.write(gibberish)
 
-    def on_image_select(self, event):
+    def open_preferences(self):
+        # Create a new window
+        self.preferences_window = tk.Toplevel(self)
+
+        # Apply the current theme to the preferences window
+        if self.theme == 'dark':
+            self.preferences_window.config(bg=self.dark_theme['bg'])
+
+        # Create a label and a button for the theme option
+        tk.Label(self.preferences_window, text='Theme:', padx=10, pady=10).pack(side='left')
+        tk.Button(self.preferences_window, text='Toggle Dark/Light Mode', command=self.toggle_theme, padx=10,
+                  pady=10).pack(side='left')
+
+    def toggle_theme(self):
+        # Toggle between dark and light mode
+        if self.theme == 'light':
+            self.theme = 'dark'
+            self.config(bg=self.dark_theme['bg'])
+            self.pane1.config(bg=self.dark_theme['bg'])
+            self.pane2.config(bg=self.dark_theme['bg'])
+            self.pane3.config(bg=self.dark_theme['bg'])
+            self.image_list.config(bg=self.dark_theme['bg'], fg=self.dark_theme['fg'],
+                                   selectbackground=self.dark_theme['selectbackground'],
+                                   selectforeground=self.dark_theme['selectforeground'])
+            self.image_frame.config(bg=self.dark_theme['bg'])
+            self.image_canvas.config(bg=self.dark_theme['bg'])
+            self.image_scrollbar_x.config(bg=self.dark_theme['bg'], troughcolor=self.dark_theme['bg'],
+                                          activebackground=self.dark_theme['bg'])
+            self.image_scrollbar_y.config(bg=self.dark_theme['bg'], troughcolor=self.dark_theme['bg'],
+                                          activebackground=self.dark_theme['bg'])
+            self.image_scale.config(bg=self.dark_theme['bg'], fg=self.dark_theme['fg'],
+                                    troughcolor=self.dark_theme['bg'])
+            self.text_editor.config(bg=self.dark_theme['bg'], fg=self.dark_theme['fg'],
+                                    insertbackground=self.dark_theme['cursor'],
+                                    selectbackground=self.dark_theme['selectbackground'],
+                                    selectforeground=self.dark_theme['selectforeground'])
+        else:
+            self.theme = 'light'
+            self.config(bg='white')
+            self.pane1.config(bg='white')
+            self.pane2.config(bg='white')
+            self.pane3.config(bg='white')
+            self.image_list.config(bg='white', fg='black', selectbackground='blue', selectforeground='white')
+            self.image_frame.config(bg='white')
+            self.image_canvas.config(bg='white')
+            self.image_scrollbar_x.config(bg='white', troughcolor='white', activebackground='white')
+            self.image_scrollbar_y.config(bg='white', troughcolor='white', activebackground='white')
+            self.image_scale.config(bg='white', fg='black', troughcolor='white')
+            self.text_editor.config(bg='white', fg='black', insertbackground='black', selectbackground='blue',
+                                    selectforeground='white')
+
+        self.save_preferences()
+
+    def on_image_select(self, event=None):
         # Check if an image is selected
         if not self.image_list.curselection():
             return
@@ -71,9 +178,22 @@ class Application(tk.Tk):
         selected_image = self.image_list.get(self.image_list.curselection())
         image_path = os.path.join(self.folder_path, selected_image)
         image = Image.open(image_path)
-        photo = ImageTk.PhotoImage(image)
-        self.image_label.config(image=photo)
-        self.image_label.image = photo
+
+        # Resize the image based on the value of the scale slider
+        scale_percent = self.image_scale.get()
+        width = int(image.width * scale_percent / 100)
+        height = int(image.height * scale_percent / 100)
+        image = image.resize((width, height), Image.LANCZOS)
+
+        # Create a PhotoImage object and keep a reference to it
+        self.photo = ImageTk.PhotoImage(image)
+
+        # Clear the canvas and display the image
+        self.image_canvas.delete('all')
+        self.image_canvas.create_image(0, 0, image=self.photo, anchor='nw')
+
+        # Update the scroll region to fit the size of the image
+        self.image_canvas.configure(scrollregion=self.image_canvas.bbox('all'))
 
         # Load the corresponding text file, if it exists
         text_file_path = os.path.splitext(image_path)[0] + '.txt'
@@ -143,6 +263,38 @@ class Application(tk.Tk):
             file.write(self.text_editor.get('1.0', tk.END))
         self.saved_label.config(text='Saved')
 
+    def on_mouse_wheel(self, event):
+        # Adjust the value of the scale slider
+        if event.delta > 0:
+            self.image_scale.set(self.image_scale.get() + 1)
+        else:
+            self.image_scale.set(self.image_scale.get() - 1)
+
+        # Resize the image
+        self.on_image_select()
+
+    def save_preferences(self):
+        # Create a ConfigParser object
+        config = configparser.ConfigParser()
+
+        # Add the current settings to the ConfigParser object
+        config['Settings'] = {'theme': self.theme}
+
+        # Determine the appropriate directory to save the file based on the operating system
+        if sys.platform == 'win32':
+            config_dir = os.path.join(os.environ['APPDATA'], 'YourAppName')
+        else:
+            config_dir = os.path.join(os.path.expanduser('~'), '.local', 'YourAppName')
+
+        # Create the directory if it doesn't exist
+        os.makedirs(config_dir, exist_ok=True)
+
+        # Write the ConfigParser object to a file in the directory
+        with open(os.path.join(config_dir, 'settings.cfg'), 'w') as config_file:
+            config.write(config_file)
+
+
 if __name__ == '__main__':
     app = Application()
+    app.bind('<MouseWheel>', app.on_mouse_wheel)
     app.mainloop()
